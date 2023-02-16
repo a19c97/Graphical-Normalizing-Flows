@@ -25,27 +25,6 @@ power-affine-DAG:
   gumble_T: .5
   normalizer: 'affine'
 
-power-mono-coupling:
-  dataset: 'power'
-  nb_flow: 1
-  b_size: 2500
-  nb_epoch: 10000
-  conditioner: 'Coupling'
-  emb_net: [60, 60, 60, 30]
-  normalizer: 'monotonic'
-  int_net: [100, 100, 100]
-  nb_steps: 20
-  solver: 'CC'
-
-power-affine-coupling:
-  dataset: 'power'
-  nb_flow: 1
-  b_size: 2500
-  nb_epoch: 10000
-  conditioner: 'Coupling'
-  emb_net: [60, 60, 60, 2]
-  normalizer: 'affine'
-
 power-mono-autoregressive:
   dataset: 'power'
   nb_flow: 1
@@ -66,6 +45,28 @@ power-affine-autoregressive:
   conditioner: 'Autoregressive'
   emb_net: [60, 60, 60, 2]
   normalizer: 'affine'
+
+power-affine-straf:
+  dataset: 'power'
+  nb_flow: 1
+  b_size: 2500
+  nb_epoch: 10000
+  conditioner: 'StrAF'
+  emb_net: [60, 60, 60, 2]
+  normalizer: 'affine'
+#  adjacency_path: './adj_mtx/power_adj_1.npz'
+  permutation_path: './adj_mtx/power_perm_1.npz'
+
+gas-affine-straf:
+  dataset: 'gas'
+  nb_flow: 1
+  b_size: 10000
+  nb_epoch: 10000
+  emb_net: [100, 3]
+  normalizer: 'affine'
+  weight_decay: 1e-3
+  conditioner: 'StrAF'
+  permutation_path: './adj_mtx/gas_perm_1.npz'
 
 gas-mono-DAG:
   dataset: 'gas'
@@ -171,29 +172,6 @@ hepmass-affine-DAG:
   normalizer: 'affine'
   weight_decay: 1e-4
 
-hepmass-mono-coupling:
-  dataset: 'hepmass'
-  nb_flow: 1
-  b_size: 100
-  nb_epoch: 10000
-  conditioner: 'Coupling'
-  emb_net: [210, 210, 210, 30]
-  normalizer: 'monotonic'
-  int_net: [200, 200, 200]
-  nb_steps: 20
-  solver: 'CCParallel'
-  weight_decay: 1e-4
-
-hepmass-affine-coupling:
-  dataset: 'hepmass'
-  nb_flow: 1
-  b_size: 100
-  nb_epoch: 10000
-  conditioner: 'Coupling'
-  emb_net: [210, 210, 210, 30]
-  normalizer: 'affine'
-  weight_decay: 1e-4
-
 hepmass-mono-autoregressive:
   dataset: 'hepmass'
   nb_flow: 1
@@ -216,6 +194,18 @@ hepmass-affine-autoregressive:
   emb_net: [210, 210, 210, 30]
   normalizer: 'affine'
   weight_decay: 1e-4
+
+hepmass-affine-straf:
+  dataset: 'hepmass'
+  nb_flow: 1
+  b_size: 100
+  nb_epoch: 10000
+  conditioner: 'StrAF'
+  emb_net: [210, 210, 210, 30]
+  normalizer: 'affine'
+  weight_decay: 1e-4
+  adjacency_path: './adj_mtx/hepmass_adj.npz'
+  permutation_path: './adj_mtx/hepmass_perm.npz'
 
 miniboone-mono-DAG:
   dataset: 'miniboone'
@@ -243,29 +233,6 @@ miniboone-affine-DAG:
   nb_steps_dual: 200
   l1: 0.
   gumble_T: .5
-  normalizer: 'affine'
-  weight_decay: 1e-2
-
-miniboone-mono-coupling:
-  dataset: 'miniboone'
-  nb_flow: 1
-  b_size: 100
-  nb_epoch: 10000
-  conditioner: 'Coupling'
-  emb_net: [430, 430, 430, 30]
-  normalizer: 'monotonic'
-  int_net: [40, 40, 40]
-  nb_steps: 20
-  solver: 'CCParallel'
-  weight_decay: 1e-2
-
-miniboone-affine-coupling:
-  dataset: 'miniboone'
-  nb_flow: 1
-  b_size: 100
-  nb_epoch: 10000
-  conditioner: 'Coupling'
-  emb_net: [430, 430, 430, 30]
   normalizer: 'affine'
   weight_decay: 1e-2
 
@@ -321,29 +288,6 @@ bsds300-affine-DAG:
   normalizer: 'affine'
   weight_decay: 1e-4
 
-bsds300-mono-coupling:
-  dataset: 'bsds300'
-  nb_flow: 1
-  b_size: 100
-  nb_epoch: 10000
-  conditioner: 'Coupling'
-  emb_net: [630, 630, 630, 30]
-  normalizer: 'monotonic'
-  int_net: [150, 150, 150]
-  nb_steps: 20
-  solver: 'CCParallel'
-  weight_decay: 1e-4
-
-bsds300-affine-coupling:
-  dataset: 'bsds300'
-  nb_flow: 1
-  b_size: 100
-  nb_epoch: 10000
-  conditioner: 'Coupling'
-  emb_net: [630, 630, 630, 30]
-  normalizer: 'affine'
-  weight_decay: 1e-4
-
 bsds300-mono-autoregressive:
   dataset: 'bsds300'
   nb_flow: 1
@@ -366,3 +310,34 @@ bsds300-affine-autoregressive:
   emb_net: [630, 630, 630, 30]
   normalizer: 'affine'
   weight_decay: 1e-4
+
+gaussian_prev_2_d20-affine-autoregressive:
+  dataset: 'gaussian_prev_2_d20'
+  nb_flow: 1
+  b_size: 200
+  nb_epoch: 10000
+  conditioner: 'Autoregressive'
+  emb_net: [100, 2]
+  normalizer: 'affine'
+
+gaussian_prev_2_d20-affine-DAG:
+  dataset: 'gaussian_prev_2_d20'
+  nb_flow: 1
+  b_size: 200
+  nb_epoch: 10000
+  conditioner: 'DAG'
+  emb_net: [100, 2]
+  nb_steps_dual: 30
+  l1: 0.
+  gumble_T: .5
+  normalizer: 'affine'
+
+gaussian_prev_2_d20-affine-straf:
+  dataset: 'gaussian_prev_2_d20'
+  nb_flow: 1
+  b_size: 2500
+  nb_epoch: 10000
+  conditioner: 'StrAF'
+  emb_net: [100, 2]
+  normalizer: 'affine'
+  adjacency_path: './adj_mtx/prev_2_d20_adj.npz'
