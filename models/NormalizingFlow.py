@@ -98,7 +98,7 @@ class NormalizingFlowStep(NormalizingFlow):
     def invert(self, z, context=None):
         x = torch.zeros_like(z)
         for i in range(self.conditioner.depth() + 1):
-            print(i, "/", self.conditioner.depth() + 1)
+            #print(i, "/", self.conditioner.depth() + 1)
             h = self.conditioner(x, context)
             x_prev = x
             x = self.normalizer.inverse_transform(z, h, context)
@@ -167,6 +167,21 @@ class FCNormalizingFlow(NormalizingFlow):
         for step in range(len(self.steps)):
             z = self.steps[-step].invert(z, context)
         return z
+
+
+class FixedFCNormalizingFlow(FCNormalizingFlow):
+    """FCNormalizingFlow with fixed adjacency matrix."""
+
+    def __init__(self, steps, z_log_density):
+        super(FixedFCNormalizingFlow, self).__init__(steps, z_log_density)
+
+    def constriantsLoss(self):
+        return 0
+
+    def loss(self, z, jac):
+        # Constraint loss removed
+        log_p_x = jac + self.z_log_density(z)
+        return -log_p_x.mean()
 
 
 class CNNormalizingFlow(FCNormalizingFlow):

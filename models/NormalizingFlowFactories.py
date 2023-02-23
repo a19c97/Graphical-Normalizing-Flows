@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from .Normalizers import *
 from .Conditionners import *
-from .NormalizingFlow import NormalizingFlowStep, FCNormalizingFlow, CNNormalizingFlow
+from .NormalizingFlow import NormalizingFlowStep, FCNormalizingFlow, CNNormalizingFlow, FixedFCNormalizingFlow
 from math import pi
 from .MLP import MNISTCNN, CIFAR10CNN
 
@@ -30,6 +30,22 @@ def buildFCNormalizingFlow(nb_steps, conditioner_type, conditioner_args, normali
         flow_step = NormalizingFlowStep(conditioner, normalizer)
         flow_steps.append(flow_step)
     return FCNormalizingFlow(flow_steps, NormalLogDensity())
+
+
+def buildFixedFCNormalizingFlow(nb_steps, conditioner_type, conditioner_args, normalizer_type, normalizer_args):
+    """
+    Function that returns a fixed normalizing flow
+
+    @param nb_steps: number of normalizing flow steps
+
+    """
+    flow_steps = []
+    for step in range(nb_steps):
+        conditioner = conditioner_type(**conditioner_args)
+        normalizer = normalizer_type(**normalizer_args)
+        flow_step = NormalizingFlowStep(conditioner, normalizer)
+        flow_steps.append(flow_step)
+    return FixedFCNormalizingFlow(flow_steps, NormalLogDensity())
 
 
 def MNIST_A_prior(in_size, kernel):

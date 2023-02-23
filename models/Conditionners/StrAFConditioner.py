@@ -19,6 +19,10 @@ def optimize_all_masks(hidden_sizes, A):
     # Function returns mask list in order for layers from inputs to outputs
     # This order matches how the masks are assigned to the networks in MADE
     masks = []
+
+    if torch.is_tensor(A):
+        A = A.cpu().numpy()
+
     constraint = np.copy(A)
     for l in hidden_sizes:
         (M1, M2) = optimize_single_mask_greedy(constraint, l)
@@ -26,6 +30,7 @@ def optimize_all_masks(hidden_sizes, A):
         constraint = M1
         masks = masks + [M2.T]   # take transpose for size: (n_inputs x n_hidden/n_output)
     masks = masks + [M1.T]
+
     return masks
 
 def optimize_single_mask_greedy(A, n_hidden):
@@ -145,12 +150,13 @@ class MADE(nn.Module):
         # EXPERIMENT
         # masks.reverse()
         # masks = [m.T for m in masks]
-        import pdb; pdb.set_trace()
         # END EXPERIMENT
         for l, m in zip(layers, masks):
             l.set_mask(m)
 
     def check_masks(self, mask_list, A):
+        if torch.is_tensor(A):
+            A = A.cpu().numpy()
         # compute mask product
         mask_prod = mask_list[-1].T
         for i in np.arange(len(mask_list)-2,-1,-1):
@@ -220,11 +226,11 @@ class ConditionalMADE(MADE):
 
 
 class StrAFConditioner(Conditioner):
-    def __init__(self, in_size, hidden, out_size, adjacency, cond_in=0):
+    def __init__(self, in_size, hidden, out_size, adjacency, device="cpu", cond_in=0):
         super(StrAFConditioner, self).__init__()
         self.in_size = in_size
         self.masked_autoregressive_net = ConditionalMADE(
-            nin=in_size, adjacency=adjacency, cond_in=cond_in, hidden_sizes=hidden, nout=out_size*in_size)
+            nin=in_size, adjacency=adjacency, cond_in=cond_in, hidden_sizes=hidden, nout=out_size*in_size, device=device)
 
     def forward(self, x, context=None):
         return self.masked_autoregressive_net(x, context)
