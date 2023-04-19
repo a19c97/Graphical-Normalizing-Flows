@@ -1,4 +1,7 @@
 from timeit import default_timer as timer
+
+import torch
+
 import lib.utils as utils
 from datetime import datetime
 import yaml
@@ -11,6 +14,7 @@ from models.NormalizingFlowFactories import buildFCNormalizingFlow
 from models.NormalizingFlow import *
 import math
 import re
+
 
 def batch_iter(X, batch_size, shuffle=False):
     """
@@ -47,17 +51,25 @@ def load_data(name):
         return UCIdatasets.DIGITS()
     elif name == "proteins":
         return UCIdatasets.PROTEINS()
+    elif name == "gaussian_prev_2_d20":
+        return UCIdatasets.GAUSSIAN_PREV_2()
     else:
         raise ValueError('Unknown dataset')
 
 
-cond_types = {"DAG": DAGConditioner, "Coupling": CouplingConditioner, "Autoregressive": AutoregressiveConditioner}
+cond_types = {
+    "DAG": DAGConditioner,
+    "Coupling": CouplingConditioner,
+    "Autoregressive": AutoregressiveConditioner,
+    "StrAF": StrAFConditioner
+}
 norm_types = {"affine": AffineNormalizer, "monotonic": MonotonicNormalizer}
 
 
-def train(dataset="POWER", load=True, nb_step_dual=100, nb_steps=20, path="", l1=.1, nb_epoch=10000,
+def train(dataset="POWER", load=True, nb_step_dual=100, nb_steps=20, path="", l1=.1, nb_epoch=10000, patience=100,
           int_net=[200, 200, 200], emb_net=[200, 200, 200], b_size=100, all_args=None, file_number=None, train=True,
-          solver="CC", nb_flow=1, weight_decay=1e-5, learning_rate=1e-3, cond_type='DAG', norm_type='affine'):
+          solver="CC", nb_flow=1, weight_decay=1e-5, learning_rate=1e-3, cond_type='DAG', norm_type='affine',
+          adjacency_path=None, permutation_path=None):
     logger = utils.get_logger(logpath=os.path.join(path, 'logs'), filepath=os.path.abspath(__file__))
     logger.info(str(all_args))
 
@@ -86,6 +98,26 @@ def train(dataset="POWER", load=True, nb_step_dual=100, nb_steps=20, path="", l1
         conditioner_args['gumble_T'] = .5
         conditioner_args['nb_epoch_update'] = nb_step_dual
         conditioner_args["hot_encoding"] = True
+    elif conditioner_type is StrAFConditioner:
+        if adjacency_path is None:
+            conditioner_args['adjacency'] = None
+        else:
+            A = np.load(adjacency_path)
+            A = A[A.files[0]]
+            conditioner_args['adjacency'] = A
+        if permutation_path is not None:
+            # Load permutation matrix
+            P = np.load(permutation_path)
+            P = P[P.files[0]]
+            P = torch.Tensor(P).to(device)
+
+            # Permute data
+            if P is not None:
+                logger.info(f"Permuting data by P loaded from {permutation_path}")
+                data.trn.x = torch.matmul(data.trn.x, P)
+                data.val.x = torch.matmul(data.val.x, P)
+                data.tst.x = torch.matmul(data.tst.x, P)
+
     normalizer_type = norm_types[norm_type]
     if normalizer_type is MonotonicNormalizer:
         normalizer_args = {"integrand_net": int_net, "cond_size": emb_net[-1], "nb_steps": nb_steps,
@@ -114,6 +146,9 @@ def train(dataset="POWER", load=True, nb_step_dual=100, nb_steps=20, path="", l1
     #print(x, model(x))
     #exit()
 
+    # early_stopper = EarlyStopper(patience=100)
+    counter = 0
+
     for epoch in range(nb_epoch):
         ll_tot = 0
         start = timer()
@@ -136,7 +171,7 @@ def train(dataset="POWER", load=True, nb_step_dual=100, nb_steps=20, path="", l1
                 loss = model.loss(z, jac)
                 if math.isnan(loss.item()) or math.isinf(loss.abs().item()):
                     torch.save(model.state_dict(), path + '/NANmodel.pt')
-                    print("Error NAN in loss")
+                    logger.info("Error NAN in loss")
                     exit()
                 ll_tot += loss.detach()
                 opt.zero_grad()
@@ -166,20 +201,37 @@ def train(dataset="POWER", load=True, nb_step_dual=100, nb_steps=20, path="", l1
             logger.info("epoch: {:d} - Train loss: {:4f} - Valid log-likelihood: {:4f} - <<DAGness>>: {:4f} - Elapsed time per epoch {:4f} (seconds)".
                         format(epoch, ll_tot.item(), ll_test, dagness, end-start))
 
-            if dagness < 1e-20 and -ll_test < best_valid_loss:
-                logger.info("------- New best validation loss --------")
-                torch.save(model.state_dict(), path + '/best_model.pt')
-                best_valid_loss = -ll_test
-                # Valid loop
-                ll_test = 0.
-                for i, cur_x in enumerate(batch_iter(data.tst.x, shuffle=True, batch_size=batch_size)):
-                    z, jac = model(cur_x)
-                    ll = (model.z_log_density(z) + jac)
-                    ll_test += ll.mean().item()
-                ll_test /= i + 1
+            # stop_early = early_stopper.early_stop(ll_test, dagness)
+            # logger.info(f"min_validtion_loss: {early_stopper.min_validation_loss} - counter: {early_stopper.counter}")
+            # if stop_early:
+            #     logger.info("------- Counter exceeds patience - stopping early --------")
+            #     break
 
-                logger.info("epoch: {:d} - Test log-likelihood: {:4f} - <<DAGness>>: {:4f}".format(epoch, ll_test,
-                                                                                                   dagness))
+            logger.info(f"best_valid_loss: {best_valid_loss} - counter: {counter}")
+
+            if dagness < 1e-20:
+                if -ll_test < best_valid_loss:
+                    counter = 0
+
+                    logger.info("------- New best validation loss --------")
+                    # torch.save(model.state_dict(), path + '/best_model.pt')
+                    best_valid_loss = -ll_test
+                    # Valid loop
+                    ll_test = 0.
+                    for i, cur_x in enumerate(batch_iter(data.tst.x, shuffle=True, batch_size=batch_size)):
+                        z, jac = model(cur_x)
+                        ll = (model.z_log_density(z) + jac)
+                        ll_test += ll.mean().item()
+                    ll_test /= i + 1
+
+                    logger.info(
+                        "epoch: {:d} - Test log-likelihood: {:4f} - <<DAGness>>: {:4f}".format(epoch, ll_test, dagness))
+                else:
+                    counter += 1
+                    if counter >= patience:
+                        logger.info("------- Counter exceeds patience - stopping early --------")
+                        break
+
             if epoch % 10 == 0 and conditioner_type is DAGConditioner:
                 stoch_gate, noise_gate, s_thresh = [], [], []
 
@@ -211,13 +263,29 @@ def train(dataset="POWER", load=True, nb_step_dual=100, nb_steps=20, path="", l1
                     conditioner.noise_gate = noise_gate[i]
                     conditioner.s_thresh = s_thresh[i]
 
-            torch.save(model.state_dict(), path + '/model_%d.pt' % epoch)
-            torch.save(opt.state_dict(), path + '/ADAM_%d.pt' % epoch)
-            if dataset == "proteins" and conditioner_type is DAGConditioner:
-                torch.save(model.getConditioners[0].soft_thresholded_A().detach().cpu(), path + '/A_%d.pt' % epoch)
+            # torch.save(model.state_dict(), path + '/model_%d.pt' % epoch)
+            # torch.save(opt.state_dict(), path + '/ADAM_%d.pt' % epoch)
+            # if dataset == "proteins" and conditioner_type is DAGConditioner:
+            if conditioner_type is DAGConditioner and epoch % 10 == 0:
+                A = model.getConditioners()[0].soft_thresholded_A().detach().cpu()
+                torch.save(A, path + '/A_%d.pt' % epoch)
 
-        torch.save(model.state_dict(), path + '/model.pt')
-        torch.save(opt.state_dict(), path + '/ADAM.pt')
+    logger.info("Training complete!")
+
+    path_to_model = path + '/model_final.pt'
+    torch.save(model.state_dict(), path_to_model)
+    logger.info("Saved model at " + path_to_model)
+    path_to_optim = path + '/ADAM_final.pt'
+    torch.save(opt.state_dict(), path_to_optim)
+    logger.info("Saved ADAM at " + path_to_optim)
+
+    if conditioner_type is DAGConditioner:
+        A = model.getConditioners()[0].soft_thresholded_A().detach().cpu()
+        path_to_A = path + '/A_final.pt'
+        torch.save(A, path_to_A)
+        logger.info("Saved adjacency matrix at " + path_to_A)
+
+
 
 import argparse
 datasets = ["power", "gas", "bsds300", "miniboone", "hepmass", "digits", "proteins"]
@@ -245,6 +313,8 @@ parser.add_argument("-emb_net", default=[100, 100, 100, 10], nargs="+", type=int
 parser.add_argument("-nb_steps_dual", default=100, type=int, help="number of step between updating Acyclicity constraint and sparsity constraint")
 parser.add_argument("-l1", default=.2, type=float, help="Maximum weight for l1 regularization")
 parser.add_argument("-gumble_T", default=1., type=float, help="Temperature of the gumble distribution.")
+parser.add_argument("-adjacency_path", default=None, type=str, help="Path to adj mtx for StrAF conditioner")
+parser.add_argument("-permutation_path", default=None, type=str, help="Permutation matrix to change the order of data variables")
 
 # Normalizer Parameters
 parser.add_argument("-normalizer", default='affine', choices=['affine', 'monotonic'], type=str)
@@ -276,13 +346,28 @@ if args.load_config is not None:
         except yaml.YAMLError as exc:
             print(exc)
 
-
 dir_name = args.dataset if args.load_config is None else args.load_config
 path = "UCIExperiments/" + dir_name + "/" + now.strftime("%m_%d_%Y_%H_%M_%S") if args.folder == "" else args.folder
+print("Experiment path: " + path)
 if not(os.path.isdir(path)):
     os.makedirs(path)
-train(args.dataset, load=args.load, path=path, nb_step_dual=args.nb_steps_dual, l1=args.l1, nb_epoch=args.nb_epoch,
-      int_net=args.int_net, emb_net=args.emb_net, b_size=args.b_size, all_args=args,
-      nb_steps=args.nb_steps, file_number=args.f_number,  solver=args.solver, nb_flow=args.nb_flow,
-      train=not args.test, weight_decay=args.weight_decay, learning_rate=args.learning_rate,
-      cond_type=args.conditioner,  norm_type=args.normalizer)
+
+# train(args.dataset, load=args.load, path=path, nb_step_dual=args.nb_steps_dual, l1=args.l1, nb_epoch=args.nb_epoch,
+#       int_net=args.int_net, emb_net=args.emb_net, b_size=args.b_size, all_args=args,
+#       nb_steps=args.nb_steps, file_number=args.f_number,  solver=args.solver, nb_flow=args.nb_flow,
+#       train=not args.test, weight_decay=args.weight_decay, learning_rate=args.learning_rate,
+#       cond_type=args.conditioner,  norm_type=args.normalizer, adjacency_path=args.adjcency_path)
+
+try:
+    train(args.dataset, load=args.load, path=path, nb_step_dual=args.nb_steps_dual, l1=args.l1, nb_epoch=args.nb_epoch,
+          int_net=args.int_net, emb_net=args.emb_net, b_size=args.b_size, all_args=args,
+          nb_steps=args.nb_steps, file_number=args.f_number,  solver=args.solver, nb_flow=args.nb_flow,
+          train=not args.test, weight_decay=args.weight_decay, learning_rate=args.learning_rate,
+          cond_type=args.conditioner,  norm_type=args.normalizer, adjacency_path=args.adjacency_path,
+          permutation_path=args.permutation_path)
+except:
+    import sys, pdb, traceback
+
+    extype, value, tb = sys.exc_info()
+    traceback.print_exc()
+    pdb.post_mortem(tb)
