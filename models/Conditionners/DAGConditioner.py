@@ -22,12 +22,16 @@ class DAGMLP(nn.Module):
 
 class DAGConditioner(Conditioner):
     def __init__(self, in_size, hidden, out_size, cond_in=0, soft_thresholding=True, h_thresh=0., gumble_T=1.,
-                 hot_encoding=False, l1=0., nb_epoch_update=1, A_prior=None):
+                 hot_encoding=False, l1=0., nb_epoch_update=1, A_prior=None, A_req_grad=True, device=None):
         super(DAGConditioner, self).__init__()
         if A_prior is None:
             self.A = nn.Parameter(torch.ones(in_size, in_size) * 1.5 + torch.randn((in_size, in_size)) * .02)
         else:
             self.A = nn.Parameter(A_prior)
+
+        if not A_req_grad:
+            self.A.requires_grad = False
+
         self.in_size = in_size
         self.exponent = self.in_size % 50
         self.s_thresh = soft_thresholding
@@ -61,7 +65,7 @@ class DAGConditioner(Conditioner):
         self.register_buffer("prev_trace", self.get_power_trace())
         self.nb_epoch_update = nb_epoch_update
         self.no_update = 0
-        self.is_invertible = False#torch.tensor(False)
+        self.is_invertible = False
 
     def getAlpha(self):
         with torch.no_grad():
@@ -150,23 +154,14 @@ class DAGConditioner(Conditioner):
                      .expand(x.shape[0], -1, -1)).view(x.shape[0] * self.in_size, -1)
         else:
             e = (x.unsqueeze(1).expand(-1, self.in_size, -1) * self.A.unsqueeze(0).expand(x.shape[0], -1, -1))\
-                .view(x.shape[0] * self.in_size, -1)
+                .reshape(x.shape[0] * self.in_size, -1)
 
         if self.hot_encoding:
             hot_encoding = torch.eye(self.in_size, device=self.A.device).unsqueeze(0).expand(x.shape[0], -1, -1)\
                 .contiguous().view(-1, self.in_size)
-            # ORIGINAL CODE
-            # e = self.embedding_net(e)
-            # full_e = torch.cat((e, hot_encoding), 1).view(x.shape[0], self.in_size, -1)
-            # # TODO Add context
-            # return full_e
-            # END ORIGINAL CODE
-
-            # ASIC'S ATTEMPT TO FIX DAG CONDITIONER ERROR
             return self.embedding_net(torch.cat((e, hot_encoding), 1)).view(x.shape[0], self.in_size, -1)
-            # END ASIC'S ATTEMPT
 
-        return self.embedding_net(e).view(x.shape[0], self.in_size, -1)#.permute(0, 2, 1).contiguous().view(x.shape[0], -1)
+        return self.embedding_net(e).view(x.shape[0], self.in_size, -1)
 
     def constrainA(self, zero_threshold=.0001):
         self.A *= (self.A.clone().abs() > zero_threshold).float()
@@ -260,7 +255,7 @@ class DAGConditioner(Conditioner):
         return lag_const
 
     def depth(self):
-        G = nx.from_numpy_matrix((self.A.detach() > 0).float().cpu().numpy(), create_using=nx.DiGraph)
+        G = nx.from_numpy_array((self.A.detach() > 0).float().cpu().numpy(), create_using=nx.DiGraph)
         if self.is_invertible or nx.is_directed_acyclic_graph(G):
             return int(nx.dag_longest_path_length(G))
         return 0

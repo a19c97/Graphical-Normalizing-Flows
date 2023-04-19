@@ -1,0 +1,45 @@
+gnf_affine:
+    conditioner_type: "GNF"
+    conditioner_args:
+        out_size: 2
+        hot_encoding: True
+        soft_thresholding: False
+        h_thresh: 0
+        A_req_grad: False
+    normalizer_type: "Affine"
+    normalizer_args: {}
+
+straf_affine:
+    conditioner_type: "StrAF"
+    conditioner_args: {
+        out_size: 2
+    }
+    normalizer_type: "Affine"
+    normalizer_args: {}
+
+straf_umnn:
+    conditioner_type: "StrAF"
+    conditioner_args: {
+        out_size: 2
+    }
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        integrand_net: [150, 150, 150]
+        solver: "CCParallel"
+        cond_size: 2
+        nb_steps: 15
+
+gnf_umnn:    
+    conditioner_type: "GNF"
+    conditioner_args:
+        out_size: 2
+        hot_encoding: True
+        soft_thresholding: False
+        h_thresh: 0
+        A_req_grad: False
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        integrand_net: [150, 150, 150]
+        solver: "CCParallel"
+        cond_size: 2
+        nb_steps: 15

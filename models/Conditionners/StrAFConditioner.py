@@ -19,6 +19,10 @@ def optimize_all_masks(hidden_sizes, A):
     # Function returns mask list in order for layers from inputs to outputs
     # This order matches how the masks are assigned to the networks in MADE
     masks = []
+
+    if torch.is_tensor(A):
+        A = A.cpu().numpy()
+
     constraint = np.copy(A)
     for l in hidden_sizes:
         (M1, M2) = optimize_single_mask_greedy(constraint, l)
@@ -26,6 +30,7 @@ def optimize_all_masks(hidden_sizes, A):
         constraint = M1
         masks = masks + [M2.T]   # take transpose for size: (n_inputs x n_hidden/n_output)
     masks = masks + [M1.T]
+
     return masks
 
 def optimize_single_mask_greedy(A, n_hidden):
@@ -46,10 +51,7 @@ def optimize_single_mask_greedy(A, n_hidden):
     for i in range(M1.shape[0]):
         # Find indices where A is zero on the ith row
         Ai_zero = np.where(A[i,:] == 0)[0]
-        # find row using linear programming + rounding
-        #res = linprog(-1*np.ones(n_hidden), A_eq=M2[:,Ai_zero].T, b_eq=np.zeros(len(Ai_zero)),
-        #              bounds=np.vstack((np.zeros(n_hidden), np.ones(n_hidden))).T)#, method='revised simplex')
-        #M1[i,:] = np.round(res.x)
+
         # find row using closed-form solution
         # find unique entries (rows) in j-th columns of M2 where Aij = 0
         row_idx = np.unique(np.where(M2[:,Ai_zero] == 1)[0])
@@ -73,7 +75,7 @@ class MaskedLinear(nn.Linear):
 
 
 class MADE(nn.Module):
-    def __init__(self, nin, hidden_sizes, nout, num_masks=1, adjacency=None,
+    def __init__(self, nin, hidden_sizes, nout, num_masks=1, A_prior=None,
                  natural_ordering=False, random=False, device="cpu"):
         """
         nin: integer; number of inputs
@@ -86,7 +88,6 @@ class MADE(nn.Module):
         num_masks: can be used to train ensemble over orderings/connections
         natural_ordering: force natural ordering of dimensions, don't use random permutations
         """
-
         super().__init__()
         self.random = random
         self.nin = nin
@@ -95,7 +96,7 @@ class MADE(nn.Module):
         assert self.nout % self.nin == 0, "nout must be integer multiple of nin"
 
         # Set adjacency matrix
-        self.A = adjacency if not (adjacency is None) else np.tril(np.ones((nin, nin)), -1)
+        self.A = A_prior if not (A_prior is None) else np.tril(np.ones((nin, nin)), -1)
 
         # define a simple MLP neural net
         self.net = []
@@ -122,35 +123,21 @@ class MADE(nn.Module):
         masks = optimize_all_masks(self.hidden_sizes, self.A)
         self.check_masks(masks, self.A)
 
-        # made_masks = self.MADE_masks()
-
         # handle the case where nout = nin * k, for integer k > 1
         if self.nout > self.nin:
             k = int(self.nout / self.nin)
             # replicate the mask across the other outputs
             masks[-1] = np.concatenate([masks[-1]] * k, axis=1)
-        #     made_masks[-1] = np.concatenate([made_masks[-1]] * k, axis=1)
-        #
-        # def reverse_T_prod(masks):
-        #     new_masks = masks.copy()
-        #     new_masks.reverse()
-        #     new_masks = [m.T for m in new_masks]
-        #     return functools.reduce(lambda a, b: np.matmul(a, b), new_masks)
-
-        # masks shapes: [(6, 60), (60, 60), (60, 60), (60, 12)] [m.shape for m in masks]
-        # MADE masks shapes: [(6, 60), (60, 60), (60, 60), (60, 12)]
 
         # set the masks in all MaskedLinear layers
         layers = [l for l in self.net.modules() if isinstance(l, MaskedLinear)]
-        # EXPERIMENT
-        # masks.reverse()
-        # masks = [m.T for m in masks]
-        import pdb; pdb.set_trace()
-        # END EXPERIMENT
+
         for l, m in zip(layers, masks):
             l.set_mask(m)
 
     def check_masks(self, mask_list, A):
+        if torch.is_tensor(A):
+            A = A.cpu().numpy()
         # compute mask product
         mask_prod = mask_list[-1].T
         for i in np.arange(len(mask_list)-2,-1,-1):
@@ -189,10 +176,8 @@ class MADE(nn.Module):
 
 # ------------------------------------------------------------------------------
 
-
 class ConditionalMADE(MADE):
-
-    def __init__(self, nin, cond_in, hidden_sizes, nout, adjacency,
+    def __init__(self, nin, cond_in, hidden_sizes, nout, A_prior,
                  num_masks=1, natural_ordering=False, random=False, device="cpu"):
         """
         nin: integer; number of inputs
@@ -206,7 +191,7 @@ class ConditionalMADE(MADE):
         natural_ordering: force natural ordering of dimensions, don't use random permutations
         """
 
-        super().__init__(nin + cond_in, hidden_sizes, nout, num_masks, adjacency, natural_ordering, random, device)
+        super().__init__(nin + cond_in, hidden_sizes, nout, num_masks, A_prior, natural_ordering, random, device)
         self.nin_non_cond = nin
         self.cond_in = cond_in
 
@@ -218,13 +203,12 @@ class ConditionalMADE(MADE):
         out = out.contiguous()[:, self.cond_in:, :]
         return out
 
-
 class StrAFConditioner(Conditioner):
-    def __init__(self, in_size, hidden, out_size, adjacency, cond_in=0):
-        super(StrAFConditioner, self).__init__()
+    def __init__(self, in_size, hidden, out_size, A_prior, device="cpu", cond_in=0):
+        super().__init__()
         self.in_size = in_size
         self.masked_autoregressive_net = ConditionalMADE(
-            nin=in_size, adjacency=adjacency, cond_in=cond_in, hidden_sizes=hidden, nout=out_size*in_size)
+            nin=in_size, A_prior=A_prior, cond_in=cond_in, hidden_sizes=hidden, nout=out_size*in_size, device=device)
 
     def forward(self, x, context=None):
         return self.masked_autoregressive_net(x, context)
