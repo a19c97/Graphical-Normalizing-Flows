@@ -32,7 +32,8 @@ def buildFCNormalizingFlow(nb_steps, conditioner_type, conditioner_args, normali
     return FCNormalizingFlow(flow_steps, NormalLogDensity())
 
 
-def buildFixedFCNormalizingFlow(nb_steps, conditioner_type, conditioner_args, normalizer_type, normalizer_args):
+def buildFixedFCNormalizingFlow(nb_steps, conditioner_type, conditioner_args,
+                                normalizer_type, normalizer_args, permute):
     """
     Function that returns a fixed normalizing flow
 
@@ -45,7 +46,7 @@ def buildFixedFCNormalizingFlow(nb_steps, conditioner_type, conditioner_args, no
         normalizer = normalizer_type(**normalizer_args)
         flow_step = NormalizingFlowStep(conditioner, normalizer)
         flow_steps.append(flow_step)
-    return FixedFCNormalizingFlow(flow_steps, NormalLogDensity())
+    return FixedFCNormalizingFlow(flow_steps, NormalLogDensity(), permute)
 
 
 def MNIST_A_prior(in_size, kernel):

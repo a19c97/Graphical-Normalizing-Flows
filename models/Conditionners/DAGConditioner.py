@@ -22,7 +22,7 @@ class DAGMLP(nn.Module):
 
 class DAGConditioner(Conditioner):
     def __init__(self, in_size, hidden, out_size, cond_in=0, soft_thresholding=True, h_thresh=0., gumble_T=1.,
-                 hot_encoding=False, l1=0., nb_epoch_update=1, A_prior=None, A_req_grad=True):
+                 hot_encoding=False, l1=0., nb_epoch_update=1, A_prior=None, A_req_grad=True, device=None):
         super(DAGConditioner, self).__init__()
         if A_prior is None:
             self.A = nn.Parameter(torch.ones(in_size, in_size) * 1.5 + torch.randn((in_size, in_size)) * .02)

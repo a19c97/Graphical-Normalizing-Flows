@@ -6,7 +6,7 @@ from .Normalizers import Normalizer
 
 class NormalizingFlow(nn.Module):
     def __init__(self):
-        super(NormalizingFlow, self).__init__()
+        super().__init__()
 
     '''
     Should return the x transformed and the log determinant of the Jacobian of the transformation
@@ -60,7 +60,7 @@ class NormalizingFlow(nn.Module):
 
 class NormalizingFlowStep(NormalizingFlow):
     def __init__(self, conditioner: Conditioner, normalizer: Normalizer):
-        super(NormalizingFlowStep, self).__init__()
+        super().__init__()
         self.conditioner = conditioner
         self.normalizer = normalizer
 
@@ -98,7 +98,6 @@ class NormalizingFlowStep(NormalizingFlow):
     def invert(self, z, context=None):
         x = torch.zeros_like(z)
         for i in range(self.conditioner.depth() + 1):
-            #print(i, "/", self.conditioner.depth() + 1)
             h = self.conditioner(x, context)
             x_prev = x
             x = self.normalizer.inverse_transform(z, h, context)
@@ -108,21 +107,27 @@ class NormalizingFlowStep(NormalizingFlow):
 
 
 class FCNormalizingFlow(NormalizingFlow):
-    def __init__(self, steps, z_log_density):
-        super(FCNormalizingFlow, self).__init__()
+    def __init__(self, steps, z_log_density, permute):
+        super().__init__()
         self.steps = nn.ModuleList()
         self.z_log_density = z_log_density
+        self.permute = permute
         for step in steps:
             self.steps.append(step)
 
     def forward(self, x, context=None):
         jac_tot = 0.
         inv_idx = torch.arange(x.shape[1] - 1, -1, -1).long()
+
         for step in self.steps:
             z, jac = step(x, context)
-            x = z[:, inv_idx]
-            jac_tot += jac
 
+            if self.permute:
+                x = z[:, inv_idx]
+            else:
+                x = z
+
+            jac_tot += jac
         return z, jac_tot
 
     def constraintsLoss(self):
@@ -172,8 +177,8 @@ class FCNormalizingFlow(NormalizingFlow):
 class FixedFCNormalizingFlow(FCNormalizingFlow):
     """FCNormalizingFlow with fixed adjacency matrix."""
 
-    def __init__(self, steps, z_log_density):
-        super(FixedFCNormalizingFlow, self).__init__(steps, z_log_density)
+    def __init__(self, steps, z_log_density, permute):
+        super().__init__(steps, z_log_density, permute)
 
     def constriantsLoss(self):
         return 0

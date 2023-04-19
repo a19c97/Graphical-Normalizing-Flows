@@ -1,0 +1,15 @@
+multimodal_1:
+    dim: 10
+    adj_thres: 0.7
+    w_range: [-2, 2]
+    mean_range: [-3, 3]
+    std_range: [0.1, 1]
+    n_modes: 3
+
+multimodal_2:
+    dim: 10
+    adj_thres: 0.7
+    w_range: [-3, 3]
+    mean_range: [-8, 8]
+    std_range: [0.01, 2]
+    n_modes: 3

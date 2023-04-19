@@ -1,5 +1,6 @@
 import numpy as np
 
+import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import matplotlib.cm as cm
 from matplotlib.lines import Line2D
@@ -14,7 +15,7 @@ def plot_gmm(ax, data, bounds, n_samp=100j, n_comp=5):
     X, Y = np.mgrid[bounds[0]:bounds[1]:n_samp, bounds[2]:bounds[3]:n_samp]
     XX = np.array([X.ravel(), Y.ravel()]).T
     Z = -clf.score_samples(XX).reshape(X.shape)
-    
+
     cmap = cm.Oranges_r(np.linspace(0,1,50))
     cmap = colors.ListedColormap(cmap[30:,:-1][::1])
 
@@ -70,3 +71,58 @@ def plot_data_contour(ax, data, colours=["Blues", "Oranges", "Greens"]):
 
     ax.legend(lines, ['1v2', '1v3', '2v3'])
 
+
+def viz_data(data, bounds=4):
+    f, ax = plt.subplots(1, 3, figsize=(10, 3))
+    ax[0].scatter(data[:, 0], data[:, 1], alpha=0.5, s=2)
+    ax[0].set_xlabel("X0")
+    ax[0].set_ylabel("X1")
+    ax[0].set_ylim(-bounds, bounds)
+    ax[0].set_xlim(-bounds, bounds)
+
+    ax[1].scatter(data[:, 0], data[:, 2], alpha=0.5, s=2)
+    ax[1].set_xlabel("X0")
+    ax[1].set_ylabel("X2")
+    ax[1].set_ylim(-bounds, bounds)
+    ax[1].set_xlim(-bounds, bounds)
+
+    ax[2].scatter(data[:, 1], data[:, 2], alpha=0.5, s=2)
+    ax[2].set_xlabel("X1")
+    ax[2].set_ylabel("X2")
+    ax[2].set_ylim(-bounds, bounds)
+    ax[2].set_xlim(-bounds, bounds)
+    f.tight_layout()
+    plt.show()
+
+
+def viz_err(pred, true, ax):
+    bounds = 4
+    f, ax = plt.subplots(1, 3, figsize=(15, 4))
+
+    d1 = pred[:, 0]
+    d2 = pred[:, 1]
+    d3 = pred[:, 2]
+
+    plot_gmm(ax[0], true[:, 0:2], bounds=[-bounds, bounds, -bounds, bounds], n_comp=6)
+    ax[0].scatter(d1, d2, s=4, alpha=0.5, label="Samples", c='k')
+    ax[0].legend()
+    ax[0].set_xlabel("X0")
+    ax[0].set_ylabel("X1")
+    ax[0].set_ylim(-bounds, bounds)
+    ax[0].set_xlim(-bounds, bounds)
+
+    plot_gmm(ax[1], true[:, [0, 2]], bounds=[-bounds, bounds, -bounds, bounds], n_comp=8)
+    ax[1].scatter(d1, d3, s=4, alpha=0.5, label="Samples", c='k')
+    ax[1].legend()
+    ax[1].set_xlabel("X0")
+    ax[1].set_ylabel("X2")
+    ax[1].set_ylim(-bounds, bounds)
+    ax[1].set_xlim(-bounds, bounds)
+
+    plot_gmm(ax[2], true[:, 1:3], bounds=[-bounds, bounds, -bounds, bounds], n_comp=10)
+    ax[2].scatter(d2, d3, s=4, alpha=0.5, label="Samples", c='k')
+    ax[2].legend()
+    ax[2].set_xlabel("X1")
+    ax[2].set_ylabel("X2")
+    ax[2].set_ylim(-bounds, bounds)
+    ax[2].set_xlim(-bounds, bounds)
