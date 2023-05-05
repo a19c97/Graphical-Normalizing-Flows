@@ -331,6 +331,7 @@ gaussian_prev_2_d20-affine-DAG:
   l1: 0.
   gumble_T: .5
   normalizer: 'affine'
+  adjacency_path: './adj_mtx/prev_2_d20_adj.npz'
 
 gaussian_prev_2_d20-affine-straf:
   dataset: 'gaussian_prev_2_d20'

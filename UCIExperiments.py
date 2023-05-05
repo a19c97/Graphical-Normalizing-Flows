@@ -10,7 +10,7 @@ import UCIdatasets
 import numpy as np
 from models.Normalizers import *
 from models.Conditionners import *
-from models.NormalizingFlowFactories import buildFCNormalizingFlow
+from models.NormalizingFlowFactories import buildFCNormalizingFlow, buildFixedFCNormalizingFlow
 from models.NormalizingFlow import *
 import math
 import re
@@ -98,13 +98,19 @@ def train(dataset="POWER", load=True, nb_step_dual=100, nb_steps=20, path="", l1
         conditioner_args['gumble_T'] = .5
         conditioner_args['nb_epoch_update'] = nb_step_dual
         conditioner_args["hot_encoding"] = True
-    elif conditioner_type is StrAFConditioner:
         if adjacency_path is None:
-            conditioner_args['adjacency'] = None
+            conditioner_args['A_prior'] = None
         else:
             A = np.load(adjacency_path)
             A = A[A.files[0]]
-            conditioner_args['adjacency'] = A
+            conditioner_args['A_prior'] = A
+    elif conditioner_type is StrAFConditioner:
+        if adjacency_path is None:
+            conditioner_args['A_prior'] = None
+        else:
+            A = np.load(adjacency_path)
+            A = A[A.files[0]]
+            conditioner_args['A_prior'] = A
         if permutation_path is not None:
             # Load permutation matrix
             P = np.load(permutation_path)
@@ -125,8 +131,10 @@ def train(dataset="POWER", load=True, nb_step_dual=100, nb_steps=20, path="", l1
     else:
         normalizer_args = {}
 
-    model = buildFCNormalizingFlow(nb_flow, conditioner_type, conditioner_args, normalizer_type, normalizer_args)
+    # model = buildFCNormalizingFlow(nb_flow, conditioner_type, conditioner_args, normalizer_type, normalizer_args)
+    model = buildFixedFCNormalizingFlow(nb_flow, conditioner_type, conditioner_args, normalizer_type, normalizer_args)
     best_valid_loss = np.inf
+    best_test_ll = -np.inf
 
     opt = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
@@ -224,12 +232,15 @@ def train(dataset="POWER", load=True, nb_step_dual=100, nb_steps=20, path="", l1
                         ll_test += ll.mean().item()
                     ll_test /= i + 1
 
+                    best_test_ll = ll_test
+
                     logger.info(
                         "epoch: {:d} - Test log-likelihood: {:4f} - <<DAGness>>: {:4f}".format(epoch, ll_test, dagness))
                 else:
                     counter += 1
                     if counter >= patience:
                         logger.info("------- Counter exceeds patience - stopping early --------")
+                        print(f'Best test likelihood: {best_test_ll}')
                         break
 
             if epoch % 10 == 0 and conditioner_type is DAGConditioner:
@@ -243,18 +254,19 @@ def train(dataset="POWER", load=True, nb_step_dual=100, nb_steps=20, path="", l1
                     conditioner.noise_gate = False
                     conditioner.s_thresh = True
                 for threshold in [.95, .5, .1, .01, .0001]:
-                    for conditioner in model.getConditioners():
-                        conditioner.h_thresh = threshold
-                    # Valid loop
-                    ll_test = 0.
-                    for i, cur_x in enumerate(batch_iter(data.val.x, shuffle=True, batch_size=batch_size)):
-                        z, jac = model(cur_x)
-                        ll = (model.z_log_density(z) + jac)
-                        ll_test += ll.mean().item()
-                    ll_test /= i
-                    dagness = max(model.DAGness())
-                    logger.info("epoch: {:d} - Threshold: {:4f} - Valid log-likelihood: {:4f} - <<DAGness>>: {:4f}".
-                                format(epoch, threshold, ll_test, dagness))
+                    pass
+                    # for conditioner in model.getConditioners():
+                    #     conditioner.h_thresh = threshold
+                    # # Valid loop
+                    # ll_test = 0.
+                    # for i, cur_x in enumerate(batch_iter(data.val.x, shuffle=True, batch_size=batch_size)):
+                    #     z, jac = model(cur_x)
+                    #     ll = (model.z_log_density(z) + jac)
+                    #     ll_test += ll.mean().item()
+                    # ll_test /= i
+                    # dagness = max(model.DAGness())
+                    # logger.info("epoch: {:d} - Threshold: {:4f} - Valid log-likelihood: {:4f} - <<DAGness>>: {:4f}".
+                    #             format(epoch, threshold, ll_test, dagness))
 
 
                 for i, conditioner in enumerate(model.getConditioners()):
