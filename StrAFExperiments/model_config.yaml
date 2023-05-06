@@ -29,7 +29,45 @@ straf_umnn:
         cond_size: 2
         nb_steps: 15
 
-gnf_umnn:    
+straf_umnn_grid:
+    conditioner_type: "StrAF"
+    conditioner_args: {}
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        solver: "CC"
+        nb_steps: 20
+    permute_latent: False
+    full_ar: False
+
+gnf_umnn_grid:
+    conditioner_type: "GNF"
+    conditioner_args:
+        hot_encoding: True
+        soft_thresholding: False
+        h_thresh: 0
+        A_req_grad: False
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        solver: "CC"
+        nb_steps: 20
+    permute_latent: True
+    full_ar: False
+
+gnf_f_umnn_grid:
+    conditioner_type: "GNF"
+    conditioner_args:
+        hot_encoding: True
+        soft_thresholding: False
+        h_thresh: 0
+        A_req_grad: False
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        solver: "CC"
+        nb_steps: 20
+    permute_latent: True
+    full_ar: True
+
+gnf_umnn:
     conditioner_type: "GNF"
     conditioner_args:
         out_size: 2
@@ -43,3 +81,181 @@ gnf_umnn:
         solver: "CCParallel"
         cond_size: 2
         nb_steps: 15
+
+straf_umnn_s:
+    conditioner_type: "StrAF"
+    conditioner_args:
+        out_size: 30
+        hidden: [500, 500, 500, 500]
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        integrand_net: [300, 300, 300, 300, 300]
+        solver: "CC"
+        cond_size: 30
+        nb_steps: 25
+    nf_steps: 10
+    permute_latent: False
+    full_ar: False
+
+gnf_umnn_s:
+    conditioner_type: "GNF"
+    conditioner_args:
+        out_size: 30
+        hot_encoding: True
+        soft_thresholding: False
+        h_thresh: 0
+        A_req_grad: False
+        hidden: [45, 45, 45, 45]
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        integrand_net: [300, 300, 300, 300, 300]
+        solver: "CC"
+        cond_size: 30
+        nb_steps: 25
+    nf_steps: 10
+    permute_latent: True
+    full_ar: False
+
+gnf_umnn_s_large:
+    conditioner_type: "GNF"
+    conditioner_args:
+        out_size: 30
+        hot_encoding: True
+        soft_thresholding: False
+        h_thresh: 0
+        A_req_grad: False
+        hidden: [500, 500, 500, 500]
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        integrand_net: [300, 300, 300, 300, 300]
+        solver: "CC"
+        cond_size: 30
+        nb_steps: 25
+    nf_steps: 10
+    permute_latent: True
+    full_ar: False
+
+gnf_umnn_s_single:
+    conditioner_type: "GNF"
+    conditioner_args:
+        out_size: 30
+        hot_encoding: True
+        soft_thresholding: False
+        h_thresh: 0
+        A_req_grad: False
+        hidden: [45, 45, 45, 45]
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        integrand_net: [300, 300, 300, 300, 300]
+        solver: "CC"
+        cond_size: 30
+        nb_steps: 25
+    nf_steps: 1
+    permute_latent: False
+    full_ar: False
+
+gnf_umnn_s_single_large:
+    conditioner_type: "GNF"
+    conditioner_args:
+        out_size: 30
+        hot_encoding: True
+        soft_thresholding: False
+        h_thresh: 0
+        A_req_grad: False
+        hidden: [500, 500, 500, 500]
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        integrand_net: [300, 300, 300, 300, 300]
+        solver: "CC"
+        cond_size: 30
+        nb_steps: 25
+    nf_steps: 1
+    permute_latent: False
+    full_ar: False
+
+gnf_np_umnn_s:
+    conditioner_type: "GNF"
+    conditioner_args:
+        out_size: 30
+        hot_encoding: True
+        soft_thresholding: False
+        h_thresh: 0
+        A_req_grad: False
+        hidden: [45, 45, 45, 45]
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        integrand_net: [300, 300, 300, 300, 300]
+        solver: "CC"
+        cond_size: 30
+        nb_steps: 25
+    nf_steps: 10
+    permute_latent: False
+    full_ar: False
+
+gnf_np_umnn_s_large:
+    conditioner_type: "GNF"
+    conditioner_args:
+        out_size: 30
+        hot_encoding: True
+        soft_thresholding: False
+        h_thresh: 0
+        A_req_grad: False
+        hidden: [500, 500, 500, 500]
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        integrand_net: [300, 300, 300, 300, 300]
+        solver: "CC"
+        cond_size: 30
+        nb_steps: 25
+    nf_steps: 10
+    permute_latent: False
+    full_ar: False
+
+gnf_f_umnn_s:
+    conditioner_type: "GNF"
+    conditioner_args:
+        out_size: 30
+        hot_encoding: True
+        soft_thresholding: False
+        h_thresh: 0
+        A_req_grad: False
+        hidden: [45, 45, 45, 45]
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        integrand_net: [300, 300, 300, 300, 300]
+        solver: "CC"
+        cond_size: 30
+        nb_steps: 25
+    nf_steps: 10
+    permute_latent: False
+    full_ar: True
+
+straf_highd_1:
+    conditioner_type: "StrAF"
+    conditioner_args:
+        out_size: 30
+        hidden: [1000, 1000, 1000, 1000]
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        integrand_net: [300, 300, 300, 300, 300]
+        solver: "CC"
+        cond_size: 30
+        nb_steps: 25
+    nf_steps: 12
+    permute_latent: False
+    full_ar: False
+
+straf_highd_2:
+    conditioner_type: "StrAF"
+    conditioner_args:
+        out_size: 30
+        hidden: [2000, 2000, 2000, 2000]
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        integrand_net: [300, 300, 300, 300, 300]
+        solver: "CC"
+        cond_size: 30
+        nb_steps: 25
+    nf_steps: 12
+    permute_latent: False
+    full_ar: False

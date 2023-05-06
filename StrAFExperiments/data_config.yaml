@@ -13,3 +13,31 @@ multimodal_2:
     mean_range: [-8, 8]
     std_range: [0.01, 2]
     n_modes: 3
+
+multimodal_3:
+    dim: 20
+    adj_thres: 0.8
+    w_range: [-3, 3]
+    mean_range: [-8, 8]
+    std_range: [0.01, 2]
+    n_modes: 3
+
+multimodal_s:
+    dim: 15
+    adj_thres: 0.8
+    w_range: [-3, 3]
+    mean_range: [-8, 8]
+    std_range: [0.01, 2]
+    n_modes: 3
+    n_samp: 5000
+    split_ratio: [0.6, 0.2, 0.2]
+
+multimodal_highd:
+    dim: 700
+    adj_thres: 0.8
+    w_range: [-3, 3]
+    mean_range: [-8, 8]
+    std_range: [0.01, 2]
+    n_modes: 3
+    n_samp: 50000
+    split_ratio: [0.6, 0.2, 0.2]
