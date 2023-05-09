@@ -10,12 +10,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import functools
+import gurobipy as gp
+from gurobipy import GRB
 
 
 """
 Functions to optimize masks
 """
-def optimize_all_masks(hidden_sizes, A):
+def optimize_all_masks(hidden_sizes, A, opt_type):
     # Function returns mask list in order for layers from inputs to outputs
     # This order matches how the masks are assigned to the networks in MADE
     masks = []
@@ -25,7 +27,18 @@ def optimize_all_masks(hidden_sizes, A):
 
     constraint = np.copy(A)
     for l in hidden_sizes:
-        (M1, M2) = optimize_single_mask_greedy(constraint, l)
+        if opt_type == 'greedy':
+            (M1, M2) = optimize_single_mask_greedy(constraint, l)
+        elif opt_type == 'IP':
+            (M1, M2) = optimize_single_mask_gurobi(constraint, l)
+        elif opt_type == 'IP_alt':
+            (M1, M2) = optimize_single_mask_gurobi(constraint, l, alt=True)
+        elif opt_type == 'LP_relax':
+            (M1, M2) = optimize_single_mask_gurobi(constraint, l, relax=True)
+        elif opt_type == 'IP_var':
+            (M1, M2) = optimize_single_mask_gurobi(constraint, l, var_pen=True)
+        else:
+            raise ValueError('opt_type is not recognized: ' + str(opt_type))
 
         constraint = M1
         masks = masks + [M2.T]   # take transpose for size: (n_inputs x n_hidden/n_output)
@@ -60,6 +73,104 @@ def optimize_single_mask_greedy(A, n_hidden):
     return M1, M2
 
 
+def optimize_single_mask_gurobi(A, n_hidden, alt=False, relax=False, var_pen=False):
+    try:
+        with gp.Env(empty=True) as env:
+            env.setParam('LogToConsole', 0)
+            env.start()
+            with gp.Model(env=env) as m:
+                # Create variables
+                if relax:
+                    # LP relaxation
+                    M1 = m.addMVar((A.shape[0], n_hidden), lb=0.0, ub=1.0, vtype=GRB.CONTINUOUS, name="M1")
+                    M2 = m.addMVar((n_hidden, A.shape[1]), lb=0.0, ub=1.0, vtype=GRB.CONTINUOUS, name="M2")
+                    m.params.NonConvex = 2
+                else:
+                    # Original integer program
+                    M1 = m.addMVar((A.shape[0], n_hidden), lb=0.0, ub=1.0, obj=0.0, vtype=GRB.BINARY, name="M1")
+                    M2 = m.addMVar((n_hidden, A.shape[1]), lb=0.0, ub=1.0, obj=0.0, vtype=GRB.BINARY, name="M2")
+
+                # Set constraints and objective
+                if alt:
+                    # Alternate formulation: might violate adjacency structure
+                    m.setObjective(
+                        sum(M1[i,:] @ M2[:,j] for i in range(A.shape[0]) for j in range(A.shape[1]) if A[i,j]==1) - \
+                            sum(M1[i,:] @ M2[:,j] for i in range(A.shape[0]) for j in range(A.shape[1]) if A[i,j]==0),
+                        GRB.MAXIMIZE
+                    )
+                else:
+                    # Original formulation: guarantees adjacency structure is respected
+                    m.addConstrs(
+                        (M1[i, :] @ M2[:, j] <= A[i, j] for i in range(A.shape[0]) for j in range(A.shape[1]) if
+                         A[i, j] == 0),
+                        name='matrixconstraints')
+                    m.addConstrs(
+                        (M1[i, :] @ M2[:, j] >= A[i, j] for i in range(A.shape[0]) for j in range(A.shape[1]) if
+                         A[i, j] > 0),
+                        name='matrixconstraints2')
+
+                    if var_pen:
+                        # Variance-penalized objective
+                        # m.setObjective(sum(A_prime) - diff(A_prime), GRB.MAXIMIZE) #<- doesn't work - can't multiply QuadExpr
+                        A_prime = {}
+                        for i in range(A.shape[0]):
+                            A_prime[i] = {}
+                            for j in range(A.shape[1]):
+                                A_prime[i][j] = m.addVar(lb=0.0, ub=A.shape[0], obj=0.0, vtype=GRB.INTEGER, name=f"A_prime_{i}{j}")
+                                m.addConstr((A_prime[i][j] == M1[i, :] @ M2[:, j]), name=f'constr_A_prime_{i}{j}')
+                        m.setObjective(sum(A_prime) - variance(A_prime), GRB.MAXIMIZE)
+                    else:
+                        # Original objective
+                        A_prime = [M1[i, :] @ M2[:, j] for i in range(A.shape[0]) for j in range(A.shape[1])]
+                        m.setObjective(sum(A_prime), GRB.MAXIMIZE)
+
+                # Optimize model
+                m.optimize()
+                obj_val = m.getObjective().getValue()
+
+                # Obtain optimized results
+                result = {}
+                result['M1'] = np.zeros((A.shape[0], n_hidden))
+                result['M2'] = np.zeros((n_hidden,A.shape[1]))
+                for v in m.getVars():
+                    if v.varName[0] == 'M':
+                        nm = v.varName.split('[')[0]
+                        idx = (v.varName.split('[')[1].replace(']','')).split(',')
+                        col_idx = int(idx[0])
+                        row_idx = int(idx[1])
+                        if relax:
+                            # Round real-valued solution to nearest integer
+                            val = v.x
+                            if val <= 0.5:
+                                result[nm][col_idx][row_idx] = 0
+                            else:
+                                result[nm][col_idx][row_idx] = 1
+                        else:
+                            result[nm][col_idx][row_idx] = v.x
+
+        print(f'Successful opt! obj = {obj_val}')
+    except gp.GurobiError as e:
+        print('Error code ' + str(e.errno) + ': ' + str(e))
+    except AttributeError:
+        print('Encountered an attribute error')
+    return result['M1'], result['M2']
+
+
+def variance(data):
+    n = len(data)
+    mean = sum(data) / n
+    squared_diff_sum = gp.LinExpr()
+    for x in data:
+        squared_diff_sum += gp.QuadExpr((x - mean) * (x - mean))
+    variance = squared_diff_sum / n
+    return variance
+
+
+def diff(data):
+    return max(data) - min(data)
+
+
+
 class MaskedLinear(nn.Linear):
     """ same as Linear except has a configurable mask on the weights """
 
@@ -75,7 +186,7 @@ class MaskedLinear(nn.Linear):
 
 
 class MADE(nn.Module):
-    def __init__(self, nin, hidden_sizes, nout, num_masks=1, A_prior=None,
+    def __init__(self, nin, hidden_sizes, nout, opt_type, num_masks=1, A_prior=None,
                  natural_ordering=False, random=False, device="cpu"):
         """
         nin: integer; number of inputs
@@ -94,6 +205,7 @@ class MADE(nn.Module):
         self.nout = nout
         self.hidden_sizes = hidden_sizes
         assert self.nout % self.nin == 0, "nout must be integer multiple of nin"
+        self.opt_type = opt_type
 
         # Set adjacency matrix
         self.A = A_prior if not (A_prior is None) else np.tril(np.ones((nin, nin)), -1)
@@ -120,7 +232,7 @@ class MADE(nn.Module):
         # could get memory expensive for large number of masks.
 
     def update_masks(self):
-        masks = optimize_all_masks(self.hidden_sizes, self.A)
+        masks = optimize_all_masks(self.hidden_sizes, self.A, self.opt_type)
         self.check_masks(masks, self.A)
 
         # handle the case where nout = nin * k, for integer k > 1
@@ -177,7 +289,7 @@ class MADE(nn.Module):
 # ------------------------------------------------------------------------------
 
 class ConditionalMADE(MADE):
-    def __init__(self, nin, cond_in, hidden_sizes, nout, A_prior,
+    def __init__(self, nin, cond_in, hidden_sizes, nout, opt_type, A_prior,
                  num_masks=1, natural_ordering=False, random=False, device="cpu"):
         """
         nin: integer; number of inputs
@@ -191,7 +303,7 @@ class ConditionalMADE(MADE):
         natural_ordering: force natural ordering of dimensions, don't use random permutations
         """
 
-        super().__init__(nin + cond_in, hidden_sizes, nout, num_masks, A_prior, natural_ordering, random, device)
+        super().__init__(nin + cond_in, hidden_sizes, nout, opt_type, num_masks, A_prior, natural_ordering, random, device)
         self.nin_non_cond = nin
         self.cond_in = cond_in
 
@@ -204,11 +316,13 @@ class ConditionalMADE(MADE):
         return out
 
 class StrAFConditioner(Conditioner):
-    def __init__(self, in_size, hidden, out_size, A_prior, device="cpu", cond_in=0):
+    def __init__(self, in_size, hidden, out_size, opt_type, A_prior, device="cpu", cond_in=0):
         super().__init__()
         self.in_size = in_size
         self.masked_autoregressive_net = ConditionalMADE(
-            nin=in_size, A_prior=A_prior, cond_in=cond_in, hidden_sizes=hidden, nout=out_size*in_size, device=device)
+            nin=in_size, A_prior=A_prior, cond_in=cond_in, hidden_sizes=hidden,
+            nout=out_size*in_size, opt_type=opt_type, device=device
+        )
 
     def forward(self, x, context=None):
         return self.masked_autoregressive_net(x, context)

@@ -69,7 +69,7 @@ norm_types = {"affine": AffineNormalizer, "monotonic": MonotonicNormalizer}
 def train(dataset="POWER", load=True, nb_step_dual=100, nb_steps=20, path="", l1=.1, nb_epoch=10000, patience=100,
           int_net=[200, 200, 200], emb_net=[200, 200, 200], b_size=100, all_args=None, file_number=None, train=True,
           solver="CC", nb_flow=1, weight_decay=1e-5, learning_rate=1e-3, cond_type='DAG', norm_type='affine',
-          adjacency_path=None, permutation_path=None):
+          adjacency_path=None, permutation_path=None, opt_type='greedy'):
     logger = utils.get_logger(logpath=os.path.join(path, 'logs'), filepath=os.path.abspath(__file__))
     logger.info(str(all_args))
 
@@ -123,6 +123,7 @@ def train(dataset="POWER", load=True, nb_step_dual=100, nb_steps=20, path="", l1
                 data.trn.x = torch.matmul(data.trn.x, P)
                 data.val.x = torch.matmul(data.val.x, P)
                 data.tst.x = torch.matmul(data.tst.x, P)
+        conditioner_args['opt_type'] = opt_type
 
     normalizer_type = norm_types[norm_type]
     if normalizer_type is MonotonicNormalizer:
@@ -376,7 +377,7 @@ try:
           nb_steps=args.nb_steps, file_number=args.f_number,  solver=args.solver, nb_flow=args.nb_flow,
           train=not args.test, weight_decay=args.weight_decay, learning_rate=args.learning_rate,
           cond_type=args.conditioner,  norm_type=args.normalizer, adjacency_path=args.adjacency_path,
-          permutation_path=args.permutation_path)
+          permutation_path=args.permutation_path, opt_type=args.opt_type)
 except:
     import sys, pdb, traceback
 

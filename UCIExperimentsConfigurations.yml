@@ -333,7 +333,7 @@ gaussian_prev_2_d20-affine-DAG:
   normalizer: 'affine'
   adjacency_path: './adj_mtx/prev_2_d20_adj.npz'
 
-gaussian_prev_2_d20-affine-straf:
+gaussian_prev_2_d20-affine-straf-greedy:
   dataset: 'gaussian_prev_2_d20'
   nb_flow: 1
   b_size: 2500
@@ -341,4 +341,51 @@ gaussian_prev_2_d20-affine-straf:
   conditioner: 'StrAF'
   emb_net: [100, 2]
   normalizer: 'affine'
+  opt_type: 'greedy'
   adjacency_path: './adj_mtx/prev_2_d20_adj.npz'
+
+gaussian_prev_2_d20-affine-straf-IP:
+  dataset: 'gaussian_prev_2_d20'
+  nb_flow: 1
+  b_size: 2500
+  nb_epoch: 10000
+  conditioner: 'StrAF'
+  emb_net: [100, 2]
+  normalizer: 'affine'
+  opt_type: 'IP'
+  adjacency_path: './adj_mtx/prev_2_d20_adj.npz'
+
+gaussian_prev_2_d20-affine-straf-IP_var:
+  dataset: 'gaussian_prev_2_d20'
+  nb_flow: 1
+  b_size: 2500
+  nb_epoch: 10000
+  conditioner: 'StrAF'
+  emb_net: [100, 2]
+  normalizer: 'affine'
+  opt_type: 'IP_var'
+  adjacency_path: './adj_mtx/prev_2_d20_adj.npz'
+
+gaussian_prev_2_d20-mono-autoregressive:
+  dataset: 'gaussian_prev_2_d20'
+  nb_flow: 1
+  b_size: 2500
+  nb_epoch: 10000
+  conditioner: 'Autoregressive'
+  emb_net: [60, 60, 60, 30]
+  nb_steps_dual: 30
+  l1: 0.
+  gumble_T: .5
+  normalizer: 'monotonic'
+  int_net: [100, 100, 100]
+  nb_steps: 20
+  solver: 'CC'
+
+mnist-affine-autoregressive:
+  dataset: 'mnist'
+  nb_flow: 1
+  b_size: 200
+  nb_epoch: 10000
+  conditioner: 'Autoregressive'
+  emb_net: [1500, 1500]
+  normalizer: 'affine'
