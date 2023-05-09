@@ -1,0 +1,5 @@
+UCIdatasets/
+UCIExperiments/
+StrAFExperiments/
+*.pyc
+.idea/*
