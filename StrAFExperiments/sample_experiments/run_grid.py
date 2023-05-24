@@ -78,7 +78,7 @@ if __name__ == "__main__":
     config.update(data_args)
     config.update(train_args)
 
-    os.environ["WANDB_CACHE_DIR"] = "/scratch/gobi1/ruiashi"
+    os.environ["WANDB_CACHE_DIR"] = "/scratch/gobi1/VECTOR_USERNAME"
 
     run = wandb.init(
         project='straf-multimode-grid',
