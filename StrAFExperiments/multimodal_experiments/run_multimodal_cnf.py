@@ -43,7 +43,7 @@ parser.add_argument("--model_name", type=str, required=True)
 
 parser.add_argument("--max_epoch", type=int, default=100)
 parser.add_argument("--batch_size", type=int, default=256)
-parser.add_argument("--lr", type=int, default=5e-3)
+parser.add_argument("--lr", type=float, default=5e-3)
 parser.add_argument("--hidden_width", type=int, required=True)
 parser.add_argument("--hidden_depth", type=int, required=True)
 parser.add_argument("--nf_step", type=int, required=True)
@@ -103,7 +103,7 @@ def get_transforms(model):
     return sample_fn, density_fn
 
 
-def train_loop(model, opt, train_dl, val_dl, max_epoch, viz=True):
+def train_loop(model, opt, train_dl, val_dl, max_epoch, viz=False):
     min_val = None
     patience = 10
     counter = 0
