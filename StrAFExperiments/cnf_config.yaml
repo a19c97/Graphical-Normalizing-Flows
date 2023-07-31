@@ -1,0 +1,30 @@
+ffjord_baseline:
+    layer_type: "ignore"
+    time_length: 0.5
+    train_T: True
+    divergence_fn: "brute_force"
+    nonlinearity: "tanh"
+
+    solver: "dopri5"
+    atol: 0.00001
+    rtol: 0.00001
+    step_size: null
+
+    test_solver: null
+    test_atol: null
+    test_rtol: null
+
+    residual: null
+    rademacher: null
+    batch_norm: null
+
+
+
+ffjord_strode:
+    layer_type: "strode"
+    time_length: 0.5
+    train_T: True
+    divergence_fn: "brute_force"
+    nonlinearity: "tanh"
+
+    solver: "dopri5"

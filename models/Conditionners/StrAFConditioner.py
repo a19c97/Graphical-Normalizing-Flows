@@ -186,8 +186,9 @@ class MaskedLinear(nn.Linear):
 
 
 class MADE(nn.Module):
-    def __init__(self, nin, hidden_sizes, nout, opt_type, num_masks=1, A_prior=None,
-                 natural_ordering=False, random=False, device="cpu"):
+    def __init__(self, nin, hidden_sizes, nout, opt_type, act_type="relu",
+                 num_masks=1, A_prior=None, natural_ordering=False,
+                 random=False, device="cpu"):
         """
         nin: integer; number of inputs
         hidden sizes: a list of integers; number of units in hidden layers
@@ -207,6 +208,13 @@ class MADE(nn.Module):
         assert self.nout % self.nin == 0, "nout must be integer multiple of nin"
         self.opt_type = opt_type
 
+        if act_type == "relu":
+            self.act = nn.ReLU
+        elif act_type == "tanh":
+            self.act = nn.Tanh
+        else:
+            raise ValueError("Unknown Activation.")
+
         # Set adjacency matrix
         self.A = A_prior if not (A_prior is None) else np.tril(np.ones((nin, nin)), -1)
 
@@ -216,9 +224,9 @@ class MADE(nn.Module):
         for h0, h1 in zip(hs, hs[1:]):
             self.net.extend([
                 MaskedLinear(h0, h1),
-                nn.ReLU(),
+                self.act(),
             ])
-        self.net.pop()  # pop the last ReLU for the output layer
+        self.net.pop()  # pop the last activation for the output layer
         self.net = nn.Sequential(*self.net)
 
         # seeds for orders/connectivities of the model ensemble
@@ -290,7 +298,8 @@ class MADE(nn.Module):
 
 class ConditionalMADE(MADE):
     def __init__(self, nin, cond_in, hidden_sizes, nout, opt_type, A_prior,
-                 num_masks=1, natural_ordering=False, random=False, device="cpu"):
+                 num_masks=1, natural_ordering=False, random=False,
+                 act_type="relu", device="cpu"):
         """
         nin: integer; number of inputs
         hidden sizes: a list of integers; number of units in hidden layers
@@ -303,7 +312,8 @@ class ConditionalMADE(MADE):
         natural_ordering: force natural ordering of dimensions, don't use random permutations
         """
 
-        super().__init__(nin + cond_in, hidden_sizes, nout, opt_type, num_masks, A_prior, natural_ordering, random, device)
+        super().__init__(nin + cond_in, hidden_sizes, nout, opt_type, act_type,
+                         num_masks, A_prior, natural_ordering, random, device)
         self.nin_non_cond = nin
         self.cond_in = cond_in
 
@@ -316,12 +326,13 @@ class ConditionalMADE(MADE):
         return out
 
 class StrAFConditioner(Conditioner):
-    def __init__(self, in_size, hidden, out_size, opt_type, A_prior, device="cpu", cond_in=0):
+    def __init__(self, in_size, hidden, out_size, opt_type, A_prior,
+                 act_type="relu", device="cpu", cond_in=0):
         super().__init__()
         self.in_size = in_size
         self.masked_autoregressive_net = ConditionalMADE(
             nin=in_size, A_prior=A_prior, cond_in=cond_in, hidden_sizes=hidden,
-            nout=out_size*in_size, opt_type=opt_type, device=device
+            nout=out_size*in_size, opt_type=opt_type, device=device, act_type=act_type
         )
 
     def forward(self, x, context=None):
@@ -329,3 +340,12 @@ class StrAFConditioner(Conditioner):
 
     def depth(self):
         return self.in_size - 1
+
+
+class StrODENet(StrAFConditioner):
+    def __init__(self, in_size, hidden, A_prior, device, opt_type="greedy"):
+        super().__init__(in_size, hidden, 1, opt_type, A_prior,
+                         device=device, act_type="tanh")
+
+    def forward(self, t, x):
+        return super().forward(x)
