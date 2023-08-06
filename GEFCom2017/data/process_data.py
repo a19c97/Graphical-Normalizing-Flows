@@ -42,19 +42,19 @@ def convert_time(row):
     return ind
 
 
-def append_hierarchical_means(df, hierarchy):
+def append_hierarchical_sums(df, hierarchy):
     df = df.copy()
     for mid_level, meters in hierarchy.groupby("mid_level")["meter_id"]:
         cols = ["meter_{}".format(m) for m in meters]
         cols = list(set(cols).intersection(set(df.columns)))
         if len(cols) == 0:
             continue
-        df[mid_level] = df[cols].mean(axis=1)
+        df[mid_level] = df[cols].sum(axis=1)
     
     for aggregate, mid_levels in hierarchy.groupby("aggregate")["mid_level"]:
         mid_levels = mid_levels.unique()        
         mid_levels = list(set(mid_levels).intersection(set(df.columns)))
-        df[aggregate] = df[mid_levels].mean(axis=1)
+        df[aggregate] = df[mid_levels].sum(axis=1)
     return df
 
 
@@ -103,6 +103,10 @@ def get_adj_mat(data_df_wm):
     return adj_mat
 
 
+def minmax_norm(df):
+    return (df-df.min())/(df.max()-df.min())
+
+
 if __name__ == "__main__":
     hierarchy_f = open("./hierarchy.csv", "r")
     load_f = open("./load.csv", "r")
@@ -144,12 +148,13 @@ if __name__ == "__main__":
     data_df = data_df[non_meter_cols + meter_cols]
     data_df.dropna(inplace=True)
 
-    data_df_wm = append_hierarchical_means(data_df, hierarchy)
+    data_df_wm = append_hierarchical_sums(data_df, hierarchy)
+    data_df_norm = minmax_norm(data_df_wm)
     adj_mat = get_adj_mat(data_df_wm)
 
 
     dataset = {
-        "df": data_df_wm,
+        "df": data_df_norm,
         "adj_mat": adj_mat
     }
 
