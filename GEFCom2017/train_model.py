@@ -13,20 +13,25 @@ import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.optim as optim
 
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from helpers import train_loop
+from helpers import train_loop_dist
+
 sys.path.append("../")
 from models.Conditionners import StrAFConditioner
 from models.Normalizers import MonotonicNormalizer
 from models.NormalizingFlow import NormalizingFlowStep, FixedFCNormalizingFlow
 from models.NormalizingFlowFactories import NormalLogDensity
 
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 parser = argparse.ArgumentParser()
-parser.add_argument("--random_seed", type=int, default=2541)
+parser.add_argument("--random_seed", type=int, default=2547)
 parser.add_argument("--full_ar", type=eval, required=True)
 parser.add_argument("--config_name", type=str, required=True)
+parser.add_argument("--n_steps", type=int)
 parser.add_argument("--cond_hidden", type=eval)
 parser.add_argument("--norm_hidden", type=eval)
 parser.add_argument("--width", type=int)
@@ -54,12 +59,14 @@ def load_config(args):
     if args.width:
         model_args["normalizer"]["cond_size"] = args.width
         model_args["conditioner"]["out_dim"] = args.width
+    if args.n_steps:
+        model_args["n_steps"] = args.n_steps
     
-    return train_args, model_args
+    return model_args, train_args
 
 
 def load_data(full_ar):
-    with open("../data/gefcom20017_processed.pkl", "rb") as f:
+    with open("./data/gefcom2017_processed.pkl", "rb") as f:
         dataset = pickle.load(f)
 
     df = dataset["df"]
@@ -79,13 +86,11 @@ def get_loaders(df, batch_size, device):
     train_data = torch.Tensor(train_df.to_numpy()).to(device)
     val_data = torch.Tensor(val_df.to_numpy()).to(device)
 
-    train_sampler = DistributedSampler(train_data)
-    val_sampler = DistributedSampler(val_data)
+    t_sampler = DistributedSampler(train_data)
+    v_sampler = DistributedSampler(val_data)
 
-    train_dl = DataLoader(train_data, batch_size=batch_size,
-                          sampler=train_sampler, shuffle=True)
-    val_dl = DataLoader(val_data, batch_size=batch_size,
-                        sampler=val_sampler)
+    train_dl = DataLoader(train_data, batch_size=batch_size, sampler=t_sampler)
+    val_dl = DataLoader(val_data, batch_size=batch_size, sampler=v_sampler)
 
     return train_dl, val_dl
 
@@ -123,9 +128,8 @@ def build_perm_nf(adj_mat, args):
     return flow
 
 
-def main_loop(gpu, n_gpus, dist_url, model_args, train_args):
-    dist.init_process_group("nccl", dist_url,
-                            rank=gpu, world_size=n_gpus)
+def main_loop(gpu, n_gpus, wandb_run, dist_url, model_args, train_args):
+    dist.init_process_group("nccl", dist_url, rank=gpu, world_size=n_gpus)
     torch.cuda.set_device(gpu)
     torch.cuda.empty_cache()
 
@@ -138,7 +142,13 @@ def main_loop(gpu, n_gpus, dist_url, model_args, train_args):
     flow = nn.parallel.DistributedDataParallel(flow, device_ids=[gpu])
     opt = optim.Adam(flow.parameters(), lr=train_args["lr"])
 
-    best_model = train_loop(flow, opt, None, train_dl, val_dl, train_args)
+    if "scheduler" in train_args and train_args["scheduler"] == "ReduceLROnPlateau":
+        sched = ReduceLROnPlateau(opt, patience=train_args["scheduler_patience"])
+    else:
+        sched = None
+
+    best_model = train_loop_dist(gpu, n_gpus, wandb_run, flow, opt, sched,
+                                 train_dl, val_dl, train_args)
 
     return best_model
 
@@ -152,15 +162,17 @@ if __name__ == "__main__":
     config = vars(args)
     config.update(model_args)
     config.update(train_args)
-    print(config)
+    print(config, flush=True)
 
-    # run = wandb.init(
-    #     project="gefcom-straf",
-    #     dir="./wandb",
-    #     tags=[],
-    #     config=config,
-    # )
+    run = wandb.init(
+        project="gefcom-straf",
+        dir="./",
+        tags=[],
+        config=config,
+    )
 
     n_gpus = torch.cuda.device_count()
-    args.dist_url = None
-    mp.spawn(main_loop, args=(n_gpus, args.dist_url, model_args, train_args))
+    mp.spawn(main_loop, args=(n_gpus, run, args.dist_url, model_args, train_args),
+             nprocs=n_gpus)
+
+    run.finish()
