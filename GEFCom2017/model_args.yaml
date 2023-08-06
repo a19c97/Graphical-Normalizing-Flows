@@ -1,0 +1,12 @@
+gefcom:
+    conditioner:
+        hidden: [500, 500]
+        opt_type: "greedy"
+        out_dim: 30
+    normalizer:
+        integrand_net: [300, 300, 300, 300]
+        cond_size: 30
+        nb_steps: 25
+        solver: "CC"
+    n_steps: 5
+    permute: True

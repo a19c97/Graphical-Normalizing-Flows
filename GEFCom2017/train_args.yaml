@@ -1,0 +1,7 @@
+gefcom:
+  lr: 1e-3
+  batch_size: 512
+  max_epoch: 100
+  use_wandb: True
+  verbose: True
+  patience: 4
