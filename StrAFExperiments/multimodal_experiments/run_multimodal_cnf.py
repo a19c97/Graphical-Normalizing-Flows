@@ -14,6 +14,7 @@ import wandb
 from sklearn.model_selection import train_test_split
 
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
@@ -51,6 +52,86 @@ parser.add_argument("--nf_step", type=int, required=True)
 args = parser.parse_args()
 
 
+class ConcatSquashLinearSparse(nn.Module):
+    def __init__(self, dim_in, dim_out, adjacency, device):
+        super(ConcatSquashLinearSparse, self).__init__()
+
+        self.dim_in = dim_in
+        self.dim_out = dim_out
+
+        self._adjacency = adjacency
+        _weight_mask = torch.zeros([dim_out, dim_in])
+        _weight_mask[:adjacency.shape[0], :adjacency.shape[1]] = torch.Tensor(adjacency)
+        self._weight_mask = _weight_mask.to(device)
+
+        lin = nn.Linear(dim_in, dim_out)
+        self._weights = lin.weight
+        self._bias = lin.bias
+
+        self._hyper_bias = nn.Linear(1, dim_out, bias=False)
+        self._hyper_gate = nn.Linear(1, dim_out)
+
+    def forward(self, t, x):
+        w = torch.mul(self._weight_mask, self._weights)
+        res = torch.addmm(self._bias, x, w.transpose(0,1))
+
+        return res * torch.sigmoid(self._hyper_gate(t.view(1, 1))) \
+            + self._hyper_bias(t.view(1, 1))
+
+
+class SparseODENet(nn.Module):
+    def __init__(self, dims, full_adjacency, device, num_layers=4):
+        super(SparseODENet, self).__init__()
+        self.num_squeeze=0
+        layers = [ConcatSquashLinearSparse(dims+1, dims, full_adjacency, device)]
+        layers = layers + [ConcatSquashLinearSparse(dims, dims, full_adjacency, device) for _ in range(num_layers-1)]
+        activation_fns = [nn.Tanh() for _ in range(num_layers)]
+        self.layers = nn.ModuleList(layers)
+        self.activation_fns = nn.ModuleList(activation_fns[:-1])
+
+    def forward(self, t, x):
+        batch_dim = x.shape[0]
+        dx = torch.cat([x, t * torch.ones([batch_dim, 1]).to(x.device)], dim=1)
+        for l, layer in enumerate(self.layers):
+            # if not last layer, use nonlinearity
+            if l < len(self.layers) - 1:
+                acti = layer(t, dx)
+                if l == 0:
+                    dx = self.activation_fns[l](acti)
+                else:
+                    dx = self.activation_fns[l](acti) + dx
+            else:
+                dx = layer(t, dx)
+        return dx
+
+
+def build_model_daphne(args, input_dim, adj_mat):
+    hidden_dims = list(map(int, args.dims.split("-")))
+    ode_net = SparseODENet(input_dim, adj_mat, device, len(hidden_dims))
+    ode_net = ode_net.to(device)
+    
+    def build_cnf():
+        odenet = ode_net
+        odefunc = layers.ODEfunc(
+            diffeq=odenet,
+            divergence_fn=args.divergence_fn
+        )
+        cnf = layers.CNF(
+            odefunc=odefunc,
+            T=args.time_length,
+            train_T=args.train_T,
+            solver=args.solver,
+        )
+        return cnf
+
+    chain = [build_cnf() for _ in range(args.num_blocks)]
+    model = layers.SequentialFlow(chain)
+
+    set_cnf_options(args, model)
+
+    return model
+
+
 def build_model_strcnf(args, input_dim, adj_mat):
 
     hidden_dims = list(map(int, args.dims.split("-")))
@@ -80,6 +161,8 @@ def build_model_strcnf(args, input_dim, adj_mat):
 def build_ffjord_model(args, input_dim, adj_mat=None):
     if args.layer_type == "strode":
         model = build_model_strcnf(args, input_dim, adj_mat).to(device)
+    elif args.layer_type == "daphne":
+        model = build_model_daphne(args, input_dim, adj_mat).to(device)
     else:
         model = build_model_tabular(args, input_dim).to(device)
 
@@ -219,7 +302,7 @@ if __name__ == "__main__":
     model_args["num_blocks"] = args.nf_step
     model, optimizer = build_ffjord_model(argparse.Namespace(**model_args),
                                           data_args["dim"], adj_mat)
-
+    print(model)
     config = vars(args)
     config.update(data_args)
     config.update(model_args)

@@ -1,9 +1,6 @@
 import argparse
 from datetime import datetime
 import pathlib
-import sys
-
-import numpy as np
 import yaml
 
 import torch
@@ -19,6 +16,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument("--model_name", type=str, required=True)
     parser.add_argument("--train_config", type=str, required=True)
+    parser.add_argument("--is_cnf", type="eval", default=False)
 
     args = parser.parse_args()
     with open("../data_config.yaml", "r") as f:

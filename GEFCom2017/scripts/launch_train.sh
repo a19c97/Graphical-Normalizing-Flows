@@ -1,6 +1,6 @@
-full_ar=(False True)
-lr=(5e-3)
-hid=([500,500])
+full_ar=(False)
+lr=(3e-3)
+hid=([5000,5000])
 steps=(5)
 for f in ${full_ar[@]}
 do

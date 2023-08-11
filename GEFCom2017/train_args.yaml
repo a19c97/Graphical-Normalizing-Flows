@@ -1,9 +1,8 @@
 gefcom:
   lr: 0.001
-  batch_size: 1024
+  batch_size: 512
   max_epoch: 500
   use_wandb: True
   verbose: True
   patience: 10
-  scheduler: "ReduceLROnPlateau"
-  scheduler_patience: 5
+

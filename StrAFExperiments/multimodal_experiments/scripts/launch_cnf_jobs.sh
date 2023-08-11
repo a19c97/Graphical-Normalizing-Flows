@@ -1,8 +1,8 @@
-model_name=(ffjord_baseline ffjord_strode)
+model_name=(ffjord_daphne)
 nf_steps=(1 5 10)
-hidden_width=(200 300)
-hidden_depth=(2 3)
-lrs=(1e-3 1e-4)
+hidden_width=(100)
+hidden_depth=(2 3 8)
+lrs=(5e-3 1e-3 1e-4)
 
 for mn in ${model_name[@]}
 do

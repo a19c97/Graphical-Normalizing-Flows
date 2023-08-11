@@ -19,9 +19,18 @@ ffjord_baseline:
     batch_norm: null
 
 
-
 ffjord_strode:
     layer_type: "strode"
+    time_length: 0.5
+    train_T: True
+    divergence_fn: "brute_force"
+    nonlinearity: "tanh"
+
+    solver: "dopri5"
+
+
+ffjord_daphne:
+    layer_type: "daphne"
     time_length: 0.5
     train_T: True
     divergence_fn: "brute_force"

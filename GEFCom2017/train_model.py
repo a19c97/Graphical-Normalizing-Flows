@@ -27,18 +27,6 @@ from models.NormalizingFlowFactories import NormalLogDensity
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--random_seed", type=int, default=2547)
-parser.add_argument("--full_ar", type=eval, required=True)
-parser.add_argument("--config_name", type=str, required=True)
-parser.add_argument("--n_steps", type=int)
-parser.add_argument("--cond_hidden", type=eval)
-parser.add_argument("--norm_hidden", type=eval)
-parser.add_argument("--width", type=int)
-parser.add_argument("--lr", type=float)
-parser.add_argument("--dist_url", type=str)
-args = parser.parse_args()
-
 
 def load_config(args):
     with open("./train_args.yaml", "r") as f:
@@ -154,6 +142,18 @@ def main_loop(gpu, n_gpus, wandb_run, dist_url, model_args, train_args):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--random_seed", type=int, default=2547)
+    parser.add_argument("--full_ar", type=eval, required=True)
+    parser.add_argument("--config_name", type=str, required=True)
+    parser.add_argument("--n_steps", type=int)
+    parser.add_argument("--cond_hidden", type=eval)
+    parser.add_argument("--norm_hidden", type=eval)
+    parser.add_argument("--width", type=int)
+    parser.add_argument("--lr", type=float)
+    parser.add_argument("--dist_url", type=str)
+    args = parser.parse_args()
+
     np.random.seed(args.random_seed)
     torch.manual_seed(args.random_seed)
 

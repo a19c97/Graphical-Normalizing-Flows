@@ -39,6 +39,16 @@ straf_umnn_grid:
     permute_latent: False
     full_ar: False
 
+straf_s_umnn_grid:
+    conditioner_type: "StrAF"
+    conditioner_args: {}
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        solver: "CC"
+        nb_steps: 20
+    permute_latent: False
+    full_ar: False
+
 gnf_umnn_grid:
     conditioner_type: "GNF"
     conditioner_args:
@@ -66,6 +76,20 @@ gnf_f_umnn_grid:
         nb_steps: 20
     permute_latent: True
     full_ar: True
+
+gnf_s_umnn_grid:
+    conditioner_type: "GNF"
+    conditioner_args:
+        hot_encoding: True
+        soft_thresholding: False
+        h_thresh: 0
+        A_req_grad: False
+    normalizer_type: "Monotonic"
+    normalizer_args:
+        solver: "CC"
+        nb_steps: 20
+    permute_latent: False
+    full_ar: False
 
 gnf_umnn:
     conditioner_type: "GNF"
